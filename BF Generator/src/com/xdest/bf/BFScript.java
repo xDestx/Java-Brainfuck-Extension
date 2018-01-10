@@ -14,7 +14,7 @@ public class BFScript {
 	 * BF Stuff
 	 */
 	private Stack<BFCommand> commandStack;
-	private int pointerPosition;
+	private int pointerPosition,falsePointer;
 	private int[] memory;
 	private InputStream is;
 	private Stack<Integer> loopPositions;
@@ -24,6 +24,7 @@ public class BFScript {
 	 * BF Watcher Stuff
 	 */
 	private Map<String,MemoryChunk> memoryUsed;
+	private boolean silentMode;
 	
 	/**
 	 * Create a BFScript
@@ -36,6 +37,7 @@ public class BFScript {
 		memoryUsed = new HashMap<String,MemoryChunk>();
 		this.is = is;
 		this.loopPositions = new Stack<Integer>();//Integer representing locations in the command stack...
+		silentMode = false;
 	}
 	
 	/*
@@ -43,33 +45,49 @@ public class BFScript {
 	 */
 	
 	protected void movePointerUp() {
+		if(!silentMode) {
+			pointerPosition++;
+		} else {
+			falsePointer++;
+		}
 		commandStack.push(BFCommand.SHIFT_UP);
-		pointerPosition++;
 	}
 	
 	protected void movePointerDown() {
+		if(!silentMode) {
+			pointerPosition--;	
+		} else {
+			falsePointer--;
+		}
 		commandStack.push(BFCommand.SHIFT_DOWN);
-		pointerPosition--;
 	}
 	
 	protected void incrementValue() {
+		if(!silentMode) {
+			memory[pointerPosition]+=1;
+		}
 		commandStack.push(BFCommand.INCREMENT);
-		memory[pointerPosition]+=1;
 	}
 	
 	protected void decrementValue() {
+		if(!silentMode) {
+			memory[pointerPosition]-=1;
+		}
 		commandStack.push(BFCommand.DECREMENT);
-		memory[pointerPosition]-=1;
 	}
 	
 	protected void printValueAtPosition() {
+		if(!silentMode) {
+			System.out.print((char)memory[pointerPosition]);
+		}
 		commandStack.push(BFCommand.PRINT);
-		System.out.print((char)memory[pointerPosition]);
 	}
 	
 	protected void inputAtPosition() {
+		if(!silentMode) {
+			readOne();
+		}
 		commandStack.push(BFCommand.INPUT);
-		readOne();
 	}
 	
 	protected void readOne() {
@@ -84,18 +102,20 @@ public class BFScript {
 	 * Always check loop when using this
 	 */
 	protected void loopStart() {
+		if(!silentMode) {
+			loopPositions.push(commandStack.size());
+		}
 		commandStack.push(BFCommand.LOOP_START);
-		loopPositions.push(commandStack.size());
 	}
 	
 	
 	protected void loopEnd() {
-		commandStack.push(BFCommand.LOOP_END);
 		if(checkLoop()) {
 			loopReturn();
 		} else {
 			loopPositions.pop();
 		}
+		commandStack.push(BFCommand.LOOP_END);
 	}
 	
 	protected void loopReturn() {
@@ -106,6 +126,10 @@ public class BFScript {
 		//loopPositions.pop();
 	}
 	
+	/**
+	 * Check if loop should execute based on current pointer position
+	 * @return true, if the loop will execute
+	 */
 	protected boolean checkLoop() {
 		//TODO: THIS
 		if(memory[pointerPosition] == 0) {
@@ -192,6 +216,16 @@ public class BFScript {
 		moveToLocation(0);
 	}
 	
+	public void setSilentMode(boolean b) {
+		this.silentMode = b;
+		if(b) {
+			falsePointer = pointerPosition;
+		}
+	}
+	
+	public void toggleSilent() {
+		setSilentMode(!this.silentMode);
+	}
 	
 	/*
 	 * END CORE METHODS
@@ -272,8 +306,22 @@ public class BFScript {
 	
 	
 	protected void moveToLocation(int location) {
-		if(location == pointerPosition || location < 0 || location >= memory.length) return;
 		int direction = pointerPosition > location ? -1:1;
+		
+		if(silentMode) {
+			if(location == falsePointer || location < 0 || location >= memory.length) return;
+			direction = falsePointer > location ? -1:1;
+			while(falsePointer != location) {
+				if(direction > 0) {
+					movePointerUp();
+				} else {
+					movePointerDown();
+				}
+			}
+			return;
+		}
+		
+		if(location == pointerPosition || location < 0 || location >= memory.length) return;
 		while(pointerPosition != location) {
 			if(direction > 0) {
 				movePointerUp();
@@ -387,6 +435,11 @@ public class BFScript {
 			//Start transfer from saveVal back to MC
 			for(int i = 0; i < size; i++) {
 				moveToLocation(mc.getAddress()+i);
+				boolean silent = false;
+				if(!checkLoop()) {
+					silent = true;
+					setSilentMode(true);
+				}
 				loopStart();
 					decrementValue();
 					moveToLocation(this.getAddress()+i);
@@ -394,7 +447,11 @@ public class BFScript {
 					moveToLocation(saveVal.getAddress()+i);
 					incrementValue();
 					moveToLocation(mc.getAddress()+i);
+					if(silent) {
+						setSilentMode(false);
+					}
 				loopEnd();
+				
 				moveToLocation(saveVal.getAddress()+i);
 				//System.out.println(i + "SAVE: " + saveVal.read()[0] + "   MC " + mc.read()[0] + "\nLOOP?? " + loopPositions.size());
 				//try {
@@ -402,14 +459,27 @@ public class BFScript {
 			//	} catch (Exception e) {
 					
 		//		}
+				silent = false;
+				if(!checkLoop()) {
+					silent = true;
+					setSilentMode(true);
+				}
 				loopStart();
 					decrementValue();
 					moveToLocation(mc.getAddress()+i);
 					incrementValue();
 					moveToLocation(saveVal.getAddress()+i);
+					if(silent) {
+						setSilentMode(false);
+					}
 				loopEnd();
 			}
 			deallocateMemory(saveVal);
+			MemoryChunk testChunk = allocateMemory("43432543tgrev",4);
+			testChunk.store("aaaa".toCharArray());
+			print(testChunk);
+			print(this);
+			deallocateMemory(testChunk);
 		}
 		
 		/**
@@ -418,11 +488,17 @@ public class BFScript {
 		protected void free() {
 			for(int i = 0; i < size; i++) {
 				moveToLocation(startPos + i);
-				if(read()[i] != 0) {
-					loopStart();
-					decrementValue();
-					loopEnd();
+				boolean silent = false;
+				if(!checkLoop()) {
+					silent = true;
+					setSilentMode(true);
 				}
+				loopStart();
+				decrementValue();
+				if(silent) {
+					setSilentMode(false);
+				}
+				loopEnd();
 			}
 			startPos = -1;
 			size = -1;
