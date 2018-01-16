@@ -64,14 +64,14 @@ public class BFScript {
 	
 	protected void incrementValue() {
 		if(!silentMode) {
-			memory[pointerPosition]+=1;
+			memory[pointerPosition]++;
 		}
 		commandStack.push(BFCommand.INCREMENT);
 	}
 	
 	protected void decrementValue() {
 		if(!silentMode) {
-			memory[pointerPosition]-=1;
+			memory[pointerPosition]--;
 		}
 		commandStack.push(BFCommand.DECREMENT);
 	}
@@ -110,12 +110,12 @@ public class BFScript {
 	
 	
 	protected void loopEnd() {
+		commandStack.push(BFCommand.LOOP_END);
 		if(checkLoop()) {
 			loopReturn();
 		} else {
 			loopPositions.pop();
 		}
-		commandStack.push(BFCommand.LOOP_END);
 	}
 	
 	protected void loopReturn() {
@@ -131,7 +131,9 @@ public class BFScript {
 	 * @return true, if the loop will execute
 	 */
 	protected boolean checkLoop() {
-		//TODO: THIS
+		if(silentMode) {
+			return memory[falsePointer] != 0;
+		}
 		if(memory[pointerPosition] == 0) {
 			//Continue
 			return false;
@@ -339,12 +341,204 @@ public class BFScript {
 		}
 	}
 	
-	//TODO: Create a "runnable" type of thing
-	public void ifGT(MemoryChunk a, MemoryChunk b) {
-		//Not allowed to use a.read() or b.read();
-		
-		//wtf does this do right now
+	public void print(MemoryChunk...c) {
+		for(MemoryChunk chunk : c) {
+			print(chunk);
+		}
 	}
+	
+	public void ifTrueDoThis(int ifLocation, BFCommand[] cmds) {
+		moveToLocation(ifLocation);
+		if(!checkLoop()) {
+			this.setSilentMode(true);
+		}
+		loopStart();
+		for(BFCommand c : cmds) {
+			switch(c) {
+			case DECREMENT:
+				decrementValue();
+				break;
+			case INCREMENT:
+				incrementValue();
+				break;
+			case INPUT:
+				inputAtPosition();
+				break;
+			case LOOP_END:
+				loopEnd();
+				break;
+			case LOOP_START:
+				loopStart();
+				break;
+			case PRINT:
+				printValueAtPosition();
+				break;
+			case SHIFT_DOWN:
+				movePointerDown();
+				break;
+			case SHIFT_UP:
+				movePointerUp();
+				break;
+			}
+		}
+		loopEnd();
+	}
+	
+	
+	/**
+	 * Returns chunk with value
+	 * @param a Chunk a
+	 * @param b Chunk b
+	 * @return Chunk of size 1 with value
+	 */
+	public MemoryChunk getDifference(MemoryChunk a, MemoryChunk b) {
+		MemoryChunk response = allocateMemory(UUID.randomUUID().toString(), 1);
+		moveToLocation(a.getAddress());
+		
+		
+		
+		if(!checkLoop()) {
+			silentMode = true;
+		}
+		loopStart();
+		decrementValue();
+		moveToLocation(b.getAddress());
+		
+		
+		
+		return response;
+	}
+	
+	/**
+	 * IF a > B do cmds
+	 * @param aLocation a value (using 0 value)
+	 * @param bLocation b value (using 0 value);
+	 * @param cmds commands to or to not execute
+	 */
+	public void ifAGTBdoThis(MemoryChunk aLocation, MemoryChunk bLocation, FutureCommands cmds) {
+		MemoryChunk valA = allocateMemory(UUID.randomUUID().toString(),1);
+		MemoryChunk valB = allocateMemory(UUID.randomUUID().toString(),1);
+		MemoryChunk difference = allocateMemory(UUID.randomUUID().toString(),1);
+		MemoryChunk loopExitor = allocateMemory(UUID.randomUUID().toString(),1);
+		valA.copyFrom(aLocation);
+		valB.copyFrom(bLocation);
+		printDebug();
+		/*
+		 * A (val a)
+
+			B (val b)
+			
+			C (Difference)
+			
+			D 0 (Loop exit)
+			
+			Start at B
+			
+			IF B > 0 Loop start [
+			MOVE TO A
+			IF A > 0 Loop start [
+			MOVE TO C >>
+			INCREMENT C +
+			MOVE TO A <<
+			DECREMENT A -
+			MOVE TO D (EXIT LOOP)
+			]
+			MOVE TO B >>
+			DECREMENT B -
+			LOOP END ]
+			
+			IF C > 0, EXECUTE THE c o d e s
+			MOVE TO C
+			LOOP START [
+			STUFF
+			LOOP START [
+			DECREMENT c TO 0
+			LOOP END ]
+			LOOP END ]
+			
+			RELEASE C
+			RELEASE D
+			RELEASE A
+			RELEASE B
+		 */
+		
+		//Difference Calculator
+		moveToLocation(valB.getAddress());
+		if(!checkLoop()) {
+			this.setSilentMode(true);
+		}
+		loopStart();
+		moveToLocation(valA.getAddress());
+		loopStart();
+		moveToLocation(difference.getAddress());
+		incrementValue();
+		moveToLocation(valA.getAddress());
+		decrementValue();
+		moveToLocation(loopExitor.getAddress());
+		loopEnd();
+		moveToLocation(valB.getAddress());
+		decrementValue();
+		if(this.silentMode) {
+			this.silentMode = false;
+		}
+		loopEnd();
+		moveToLocation(difference.getAddress());
+		if(!checkLoop()) {
+			this.setSilentMode(true);
+		}
+		loopStart();
+		execute(cmds);
+		moveToLocation(loopExitor.getAddress());
+		if(silentMode) {
+			silentMode = false;
+		}
+		loopEnd();
+		deallocateMemory(loopExitor);
+		deallocateMemory(difference);
+		deallocateMemory(valA);
+		deallocateMemory(valB);
+	}
+	
+	protected void execute(FutureCommands cmds) {
+		for(BFFutureCommand c : cmds.getActions()) {
+			switch (c) {
+			case COPY_CHUNK_A_TO_B:
+				c.getDestChunk().copyFrom(c.getChunk());
+				break;
+			case DECREMENT:
+				this.decrementValue();
+				break;
+			case INCREMENT:
+				this.incrementValue();
+				break;
+			case INPUT:
+				this.inputAtPosition();
+				break;
+			case LOOP_END:
+				this.loopEnd();
+				break;
+			case LOOP_START:
+				this.loopStart();
+				break;
+			case MOVE_TO_CHUNK:
+				this.moveToLocation(c.getChunkAddress());
+				break;
+			case PRINT:
+				this.printValueAtPosition();
+				break;
+			case PRINT_CHUNK:
+				this.print(c.getChunk());
+				break;
+			case SHIFT_DOWN:
+				this.movePointerDown();
+				break;
+			case SHIFT_UP:
+				this.movePointerUp();
+				break;
+			}
+		}
+	}
+	
 	
 	public String getBF() {
 		String s = "";
@@ -354,6 +548,7 @@ public class BFScript {
 		}
 		return s;
 	}
+	
 	
 	/**
 	 * Memory Chunks cannot be split.
@@ -426,6 +621,9 @@ public class BFScript {
 		
 		public void copyFrom(MemoryChunk mc) {
 			int size = mc.getSize();
+			if(size > getSize()) {
+				size = getSize();
+			}
 			MemoryChunk saveVal = allocateMemory(UUID.randomUUID().toString(), size);
 			moveToLocation(mc.getAddress());
 			//Move to MC
@@ -451,14 +649,7 @@ public class BFScript {
 						setSilentMode(false);
 					}
 				loopEnd();
-				
 				moveToLocation(saveVal.getAddress()+i);
-				//System.out.println(i + "SAVE: " + saveVal.read()[0] + "   MC " + mc.read()[0] + "\nLOOP?? " + loopPositions.size());
-				//try {
-			//		Thread.sleep(10000);
-			//	} catch (Exception e) {
-					
-		//		}
 				silent = false;
 				if(!checkLoop()) {
 					silent = true;
@@ -475,11 +666,18 @@ public class BFScript {
 				loopEnd();
 			}
 			deallocateMemory(saveVal);
-			MemoryChunk testChunk = allocateMemory("43432543tgrev",4);
-			testChunk.store("aaaa".toCharArray());
-			print(testChunk);
-			print(this);
-			deallocateMemory(testChunk);
+		}
+		
+		/**
+		 * Allow input for the specified count. -1 for full memory value, anything over this chunk's size will not be enacted
+		 * @param count
+		 */
+		public void input(int count) {
+			count = count == -1 || count > size?size:count;
+			for(int i = 0; i < count; i++) {
+				moveToLocation(this.getAddress()+i);
+				inputAtPosition();
+			}
 		}
 		
 		/**
