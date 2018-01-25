@@ -9,6 +9,11 @@ import java.util.Set;
 import java.util.Stack;
 import java.util.UUID;
 
+/**
+ * A BF Program wrapper. Runs the BF program as it's input, can produce the BF equivelent. 
+ * @author xDest
+ *
+ */
 public class BFScript {
 	/*
 	 * BF Stuff
@@ -29,6 +34,7 @@ public class BFScript {
 	/**
 	 * Create a BFScript
 	 * @param size Memory size in bytes
+	 * @param is InputStream used to read.
 	 */
 	public BFScript(int size, InputStream is) {
 		commandStack = new Stack<BFCommand>();
@@ -142,6 +148,9 @@ public class BFScript {
 		}
 	}
 	
+	/**
+	 * Print the current memory state and pointer position
+	 */
 	public void printDebug() {
 		//Print memory
 		//Print pointer
@@ -200,6 +209,9 @@ public class BFScript {
 		}
 	}
 	
+	/**
+	 * End the program. Clear all used memory and close input stream. Return to position 0.
+	 */
 	public void end() {
 		if(is!=null)
 			try {
@@ -218,6 +230,10 @@ public class BFScript {
 		moveToLocation(0);
 	}
 	
+	/**
+	 * Set silent mode. Silent mode means the bot continues to add to the command stack, but does not perform actions.
+	 * @param b True or False
+	 */
 	public void setSilentMode(boolean b) {
 		this.silentMode = b;
 		if(b) {
@@ -225,6 +241,9 @@ public class BFScript {
 		}
 	}
 	
+	/**
+	 * Toggle silent mode
+	 */
 	public void toggleSilent() {
 		setSilentMode(!this.silentMode);
 	}
@@ -236,7 +255,9 @@ public class BFScript {
 	/**
 	 * Allocate Memory in BFVM?
 	 * @param size Memory Allocation Size
-	 * @return Memory "Address", -1 if failed
+	 * @param name Name of key for this chunk
+	 * @see MemoryChunk
+	 * @return MemoryChunk, null if failed
 	 */
 	public MemoryChunk allocateMemory(String name, int size) {
 		boolean posFound = false;
@@ -263,8 +284,9 @@ public class BFScript {
 	}
 	
 	/**
-	 * Slower version of deallocate memory
-	 * @param c
+	 * Slower version of {@link #deallocateMemory(String)}
+	 * @param c Chunk to deallocate
+	 * @see MemoryChunk
 	 */
 	public void deallocateMemory(MemoryChunk c) {
 		if(c!=null && memoryUsed.containsValue(c) && c.getAddress() != -1) {
@@ -278,6 +300,11 @@ public class BFScript {
 		}
 	}
 	
+	/**
+	 * Retrieve and dispose the MemoryChunk using this key.
+	 * @param s The key
+	 * @see MemoryChunk
+	 */
 	public void deallocateMemory(String s) {
 		if(memoryUsed.containsKey(s)) {
 			MemoryChunk mc = memoryUsed.get(s);
@@ -333,6 +360,10 @@ public class BFScript {
 		}
 	}
 
+	/**
+	 * Print out the values wrapped by the chunk.
+	 * @param c The chunk to print out
+	 */
 	public void print(MemoryChunk c) {
 		this.moveToLocation(c.getAddress());
 		for(int i = 0; i < c.getSize(); i++) {
@@ -341,12 +372,23 @@ public class BFScript {
 		}
 	}
 	
+	/**
+	 * Print out numerous chunks.
+	 * @see #print(MemoryChunk)
+	 * @param c Chunks to print
+	 */
 	public void print(MemoryChunk...c) {
 		for(MemoryChunk chunk : c) {
 			print(chunk);
 		}
 	}
 	
+	/**
+	 * Currently non working if statement implementation
+	 * @param ifLocation Pointer location in the event the statement is true
+	 * @param cmds The commands to run
+	 */
+	@Deprecated
 	public void ifTrueDoThis(int ifLocation, BFCommand[] cmds) {
 		moveToLocation(ifLocation);
 		if(!checkLoop()) {
@@ -410,11 +452,12 @@ public class BFScript {
 	}
 	
 	/**
-	 * IF a > B do cmds
+	 * IF a greater than B do cmds
 	 * @param aLocation a value (using 0 value)
 	 * @param bLocation b value (using 0 value);
 	 * @param cmds commands to or to not execute
 	 */
+	@Deprecated
 	public void ifAGTBdoThis(MemoryChunk aLocation, MemoryChunk bLocation, FutureCommands cmds) {
 		MemoryChunk valA = allocateMemory(UUID.randomUUID().toString(),1);
 		MemoryChunk valB = allocateMemory(UUID.randomUUID().toString(),1);
@@ -539,7 +582,10 @@ public class BFScript {
 		}
 	}
 	
-	
+	/**
+	 * Get the BF representation of this program
+	 * @return A BF String
+	 */
 	public String getBF() {
 		String s = "";
 		Iterator<BFCommand> bfi = commandStack.iterator();
@@ -564,10 +610,18 @@ public class BFScript {
 			this.startPos = startingPosition;
 		}
 		
+		/**
+		 * Get the address if this chunk
+		 * @return The memory address
+		 */
 		public int getAddress() {
 			return this.startPos;
 		}
 		
+		/**
+		 * Get the size of this chunk
+		 * @return The size
+		 */
 		public int getSize() {
 			return this.size;
 		}
@@ -604,6 +658,10 @@ public class BFScript {
 			}
 		}
 		
+		/**
+		 * Read the values stored in the positions wrapped.
+		 * @return An array up to the current {@link #getSize()}
+		 */
 		public int[] read() {
 			int[] data = new int[size];
 			for(int i = 0; i < size; i++) {
@@ -612,6 +670,11 @@ public class BFScript {
 			return data;
 		}
 		
+		/**
+		 * Check whether contains position
+		 * @param i The position
+		 * @return true, if it contains
+		 */
 		public boolean containsPosition(int i) {
 			if(i >= startPos && i <= startPos+size) {
 				return true;
@@ -619,6 +682,10 @@ public class BFScript {
 			return false;
 		}
 		
+		/**
+		 * Copy a value from a given MemoryChunk into self
+		 * @param mc The chunk to copy
+		 */
 		public void copyFrom(MemoryChunk mc) {
 			int size = mc.getSize();
 			if(size > getSize()) {
@@ -670,7 +737,7 @@ public class BFScript {
 		
 		/**
 		 * Allow input for the specified count. -1 for full memory value, anything over this chunk's size will not be enacted
-		 * @param count
+		 * @param count The amount of characters to read
 		 */
 		public void input(int count) {
 			count = count == -1 || count > size?size:count;
